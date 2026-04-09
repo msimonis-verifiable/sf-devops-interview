@@ -1,9 +1,7 @@
 #!/bin/bash
 #
-# Validates .github/workflows/deploy-production.yml for known issues.
+# Validates .github/workflows/deploy-production.yml
 # Called by the validate-deploy-workflow CI check on pull requests.
-#
-# Each check prints PASS or FAIL. The script exits non-zero if any check fails.
 
 WORKFLOW=".github/workflows/deploy-production.yml"
 FAILURES=0
@@ -14,166 +12,128 @@ fail() { echo "  FAIL: $1"; FAILURES=$((FAILURES + 1)); }
 echo "Validating $WORKFLOW"
 echo "========================================"
 
-# -------------------------------------------------------
-# 1. No legacy tarball CLI install
-# -------------------------------------------------------
+# 1
 echo ""
-echo "Check 1: Salesforce CLI installation method"
+echo "Check 1: CLI installation"
 if grep -q "wget.*sfdx.*tar" "$WORKFLOW" 2>/dev/null; then
-    fail "Still using legacy tarball download for Salesforce CLI. Use 'npm install -g @salesforce/cli', a setup action, or the salesforce/cli Docker container."
+    fail "CLI installation method"
 else
-    pass "No legacy tarball CLI install found."
+    pass "CLI installation"
 fi
 
-# -------------------------------------------------------
-# 2. No outdated GitHub Actions
-# -------------------------------------------------------
+# 2
 echo ""
-echo "Check 2: GitHub Actions versions"
+echo "Check 2: Action versions"
 OUTDATED=0
 if grep -q "actions/checkout@v[12]" "$WORKFLOW" 2>/dev/null; then
-    fail "actions/checkout is outdated. Use v4."
+    fail "checkout action version"
     OUTDATED=1
 fi
 if grep -q "actions/setup-node@v[123]" "$WORKFLOW" 2>/dev/null; then
-    fail "actions/setup-node is outdated. Use v4."
+    fail "setup-node action version"
     OUTDATED=1
 fi
 if [ $OUTDATED -eq 0 ]; then
-    pass "GitHub Actions are up to date."
+    pass "Action versions"
 fi
 
-# -------------------------------------------------------
-# 3. No EOL Node.js version
-# -------------------------------------------------------
+# 3
 echo ""
 echo "Check 3: Node.js version"
-if grep -q "node-version: 16" "$WORKFLOW" 2>/dev/null; then
-    fail "Node.js 16 is EOL. Use 18 or 20."
-elif grep -q "node-version: 14" "$WORKFLOW" 2>/dev/null; then
-    fail "Node.js 14 is EOL. Use 18 or 20."
+if grep -qE "node-version: (14|16)" "$WORKFLOW" 2>/dev/null; then
+    fail "Node.js version"
 else
-    pass "Node.js version is current."
+    pass "Node.js version"
 fi
 
-# -------------------------------------------------------
-# 4. No secrets leaked to logs (cat, echo with secrets)
-# -------------------------------------------------------
+# 4
 echo ""
 echo "Check 4: Secret handling"
 SECRET_ISSUES=0
-
-# Check for cat/echo that could dump the metadata file with secrets
 if grep -A 20 "Set Connected App Secrets" "$WORKFLOW" | grep -qE 'cat (\$|"|\./)'; then
-    fail "Found 'cat' command in secret injection step. This leaks secrets to workflow logs."
+    fail "Secret leakage in logs"
     SECRET_ISSUES=1
 fi
-
-# Check that secrets are passed via env vars, not direct interpolation in run commands
-# (We look for the env: block in the secrets step as a positive signal)
 if grep -B 2 -A 10 "Set Connected App Secrets" "$WORKFLOW" | grep -q "env:"; then
-    pass "Secrets are passed via environment variables."
+    :
 else
-    # Only flag if they still have direct ${{ secrets.X }} in the run block
     if grep -A 10 "Set Connected App Secrets" "$WORKFLOW" | grep "run:" -A 8 | grep -q 'secrets\.'; then
-        fail "Secrets are interpolated directly into the shell command. Use env: block instead."
+        fail "Secret injection method"
         SECRET_ISSUES=1
     fi
 fi
-
 if [ $SECRET_ISSUES -eq 0 ]; then
-    pass "No secret leakage patterns found."
+    pass "Secret handling"
 fi
 
-# -------------------------------------------------------
-# 5. Decrypted key cleanup
-# -------------------------------------------------------
+# 5
 echo ""
 echo "Check 5: Sensitive file cleanup"
 if grep -q "rm.*server\.key" "$WORKFLOW" 2>/dev/null; then
-    # Check it runs on failure too
     if grep -B 3 "rm.*server\.key" "$WORKFLOW" | grep -q "always()"; then
-        pass "Decrypted key is cleaned up (with always() condition)."
+        pass "Sensitive file cleanup"
     else
-        fail "Key cleanup exists but doesn't use 'if: always()'. It won't run on failure."
+        fail "Cleanup runs conditionally"
     fi
 else
-    fail "Decrypted server.key is never cleaned up. Add a cleanup step with 'if: always()'."
+    fail "Sensitive file cleanup"
 fi
 
-# -------------------------------------------------------
-# 6. Deploy commands have --wait
-# -------------------------------------------------------
+# 6
 echo ""
-echo "Check 6: Deploy --wait flag"
+echo "Check 6: Deploy reliability"
 DEPLOY_LINES=$(grep "sf project deploy start" "$WORKFLOW" 2>/dev/null)
 DEPLOY_COUNT=$(echo "$DEPLOY_LINES" | wc -l | tr -d ' ')
 WAIT_COUNT=$(echo "$DEPLOY_LINES" | grep -c "\-\-wait" || true)
-
 if [ "$DEPLOY_COUNT" -gt 0 ] && [ "$WAIT_COUNT" -eq "$DEPLOY_COUNT" ]; then
-    pass "All deploy commands have --wait."
+    pass "Deploy reliability"
 else
-    fail "One or more 'sf project deploy start' commands are missing --wait. Deploys without --wait return immediately and report false success."
+    fail "Deploy reliability"
 fi
 
-# -------------------------------------------------------
-# 7. No NoTestRun for production
-# -------------------------------------------------------
+# 7
 echo ""
-echo "Check 7: Test level"
+echo "Check 7: Test execution"
 if grep "deploy start" "$WORKFLOW" | grep -v "destructive" | grep -q "NoTestRun"; then
-    fail "Main deploy uses --test-level NoTestRun. Production deployments require tests. Use RunLocalTests."
+    fail "Test execution"
 else
-    pass "Deploy does not use NoTestRun for the main deployment."
+    pass "Test execution"
 fi
 
-# -------------------------------------------------------
-# 8. Slack notification has conditional execution
-# -------------------------------------------------------
+# 8
 echo ""
-echo "Check 8: Slack notification conditions"
-# Look for an if: condition near the Slack step
+echo "Check 8: Notification conditions"
 if grep -B 2 "slackapi/slack-github-action" "$WORKFLOW" | grep -q "if:"; then
-    pass "Slack notification has a conditional (if:)."
-elif grep -c "slackapi/slack-github-action" "$WORKFLOW" | grep -q "^2$"; then
-    # Two Slack steps probably means success + failure split
-    pass "Multiple Slack notification steps found (likely success/failure split)."
-elif grep -c "Notify Slack" "$WORKFLOW" | grep -q "^[2-9]"; then
-    pass "Multiple notification steps found."
+    pass "Notification conditions"
+elif [ "$(grep -c "slackapi/slack-github-action" "$WORKFLOW")" -ge 2 ]; then
+    pass "Notification conditions"
+elif [ "$(grep -c "Notify Slack" "$WORKFLOW")" -ge 2 ]; then
+    pass "Notification conditions"
+elif grep -B 10 "slackapi/slack-github-action" "$WORKFLOW" | grep -q "if:"; then
+    pass "Notification conditions"
 else
-    # Check if it's in a separate job with needs/if
-    if grep -B 10 "slackapi/slack-github-action" "$WORKFLOW" | grep -q "if:"; then
-        pass "Slack notification has a conditional."
-    else
-        fail "Slack notification runs unconditionally. A failed deploy will send a success message. Add 'if: success()' or split into success/failure steps."
-    fi
+    fail "Notification conditions"
 fi
 
-# -------------------------------------------------------
-# 9. No namespace stripping for production
-# -------------------------------------------------------
+# 9
 echo ""
 echo "Check 9: Namespace handling"
 if grep -q 'sed.*credcheck__' "$WORKFLOW" 2>/dev/null; then
-    fail "Workflow strips the credcheck__ namespace. This is correct for staging (no namespace) but WRONG for the packaging org where the namespace is expected. Remove this step for production deployments."
+    fail "Namespace handling"
 else
-    pass "No namespace stripping found."
+    pass "Namespace handling"
 fi
 
-# -------------------------------------------------------
-# 10. No @deprecated commenting for production
-# -------------------------------------------------------
+# 10
 echo ""
-echo "Check 10: @deprecated handling"
+echo "Check 10: Annotation handling"
 if grep -q 'sed.*@deprecated' "$WORKFLOW" 2>/dev/null; then
-    fail "@deprecated annotations are being commented out. This is needed for non-packaging orgs but should NOT be done for the packaging org. Remove this step for production."
+    fail "Annotation handling"
 else
-    pass "No @deprecated commenting found."
+    pass "Annotation handling"
 fi
 
-# -------------------------------------------------------
 # Summary
-# -------------------------------------------------------
 echo ""
 echo "========================================"
 if [ $FAILURES -eq 0 ]; then
@@ -181,7 +141,5 @@ if [ $FAILURES -eq 0 ]; then
     exit 0
 else
     echo "$FAILURES CHECK(S) FAILED"
-    echo ""
-    echo "Fix the issues above in .github/workflows/deploy-production.yml and push again."
     exit 1
 fi
