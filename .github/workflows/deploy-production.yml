@@ -1,0 +1,107 @@
+# CI/CD Pipeline - Validate & Deploy Managed Package
+# Validates source conversion and code quality on pull requests.
+# Deploys to the packaging org on push to main.
+
+name: CI - Validate & Deploy
+
+on:
+    pull_request:
+        branches:
+            - main
+    push:
+        branches:
+            - main
+        paths-ignore:
+            - 'README.md'
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+        steps:
+            - name: 'Install Salesforce CLI'
+              run: |
+                  npm install --global @salesforce/cli
+                  sf version
+
+            - name: 'Setup Node.js'
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: 'npm'
+
+            - name: 'Install Build Dependencies'
+              run: npm ci
+
+            - name: 'Checkout source code'
+              uses: actions/checkout@v4
+
+            - name: 'Verify code formatting'
+              run: npx prettier --check "force-app/**/*.cls"
+
+            - name: 'Set Connected App Secrets'
+              if: github.event_name == 'push'
+              run: |
+                  FILE_PATH=./force-app/main/customMetadata/Setup_Configuration.Default.md-meta.xml
+                  sed -i "s/CREDCHECK_CLIENT_ID/${{ secrets.CREDCHECK_CLIENT_ID }}/g" $FILE_PATH
+                  sed -i "s/CREDCHECK_CLIENT_SECRET/${{ secrets.CREDCHECK_CLIENT_SECRET }}/g" $FILE_PATH
+                  echo "Updated metadata:"
+                  cat $FILE_PATH
+
+            - name: 'Convert to MDAPI format'
+              run: |
+                  sf project convert source \
+                    --root-dir force-app \
+                    --source-dir force-app/main \
+                    --output-dir mdapi_output_dir \
+                    --package-name "CredCheck"
+
+            - name: 'Validate conversion'
+              run: |
+                  test -f mdapi_output_dir/package.xml || { echo "package.xml not found"; exit 1; }
+                  echo "Contents:"
+                  ls -la mdapi_output_dir/
+                  echo ""
+                  cat mdapi_output_dir/package.xml
+
+    deploy:
+        needs: validate
+        if: github.event_name == 'push'
+        runs-on: ubuntu-latest
+        steps:
+            - name: 'Checkout source code'
+              uses: actions/checkout@v4
+
+            - name: 'Install Salesforce CLI'
+              run: |
+                  npm install --global @salesforce/cli
+                  sf version
+
+            - name: 'Set Connected App Secrets'
+              run: |
+                  FILE_PATH=./force-app/main/customMetadata/Setup_Configuration.Default.md-meta.xml
+                  sed -i "s/CREDCHECK_CLIENT_ID/${{ secrets.CREDCHECK_CLIENT_ID }}/g" $FILE_PATH
+                  sed -i "s/CREDCHECK_CLIENT_SECRET/${{ secrets.CREDCHECK_CLIENT_SECRET }}/g" $FILE_PATH
+
+            - name: 'Remove namespace from metadata'
+              run: 'sed -i "s/credcheck__//g" force-app/main/customMetadata/*.md-meta.xml'
+
+            - name: 'Convert to MDAPI format'
+              run: |
+                  sf project convert source \
+                    --root-dir force-app \
+                    --source-dir force-app/fflib \
+                    --source-dir force-app/main \
+                    --output-dir mdapi_output_dir \
+                    --package-name "CredCheck"
+
+            - name: 'Decrypt server key'
+              run: 'openssl enc -nosalt -aes-256-cbc -d -in assets/server-key/server.key.enc -out assets/server-key/server.key -base64 -K ${{ secrets.DECRYPTION_KEY }} -iv ${{ secrets.DECRYPTION_IV }}'
+
+            - name: 'Authorize packaging org'
+              run: 'sf org login jwt --instance-url ${{ secrets.ENDPOINT }} --client-id ${{ secrets.CONSUMER_KEY }} --jwt-key-file assets/server-key/server.key --username ${{ secrets.USERNAME }} --alias packaging'
+
+            - name: 'Deploy to packaging org'
+              run: 'sf project deploy start --metadata-dir mdapi_output_dir --target-org packaging --test-level NoTestRun'
+
+            - name: 'Deploy destructive changes'
+              run: 'sf project deploy start --manifest assets/destructiveChanges/package.xml --post-destructive-changes assets/destructiveChanges/destructiveChanges.xml --target-org packaging --ignore-warnings'
