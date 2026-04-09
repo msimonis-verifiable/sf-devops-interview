@@ -14,15 +14,16 @@ CredCheck is a Salesforce ISV that ships a 1GP managed package (namespace: `cred
 
 ## Your Task
 
-The file `.github/workflows/deploy-production.yml` is a GitHub Actions workflow that deploys the CredCheck managed package to a target org. It has issues: bugs that will cause failures, security problems, and best-practice violations.
+There is an open pull request on this repo that adds a new GitHub Actions workflow: `deploy-production.yml`. The workflow is meant to deploy the CredCheck managed package to the packaging org.
+
+The workflow has issues: bugs that will cause failures, security problems, and best-practice violations.
 
 **Your job:**
 
-1. Fork this repository
-2. Create a branch
-3. Find and fix the issues in `.github/workflows/deploy-production.yml`
-4. Open a pull request back to `main`
-5. The **validate-deploy-workflow** CI check must pass
+1. Check out the PR branch
+2. Find and fix the issues in `.github/workflows/deploy-production.yml`
+3. Push your fixes
+4. The **validate-deploy-workflow** CI check must pass
 
 The validation checks for 10 specific issues. Fix as many as you can.
 
