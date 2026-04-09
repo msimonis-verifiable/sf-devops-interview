@@ -1,0 +1,46 @@
+name: CI - Staging
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - staging
+        paths-ignore:
+            - 'sfdx-project.json'
+            - 'README.md'
+
+jobs:
+    staging-build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: 'Install Salesforce CLI'
+              run: |
+                  wget https://developer.salesforce.com/media/salesforce-cli/sfdx/channels/stable/sfdx-linux-x64.tar.xz
+                  mkdir ~/sfdx
+                  tar xJf sfdx-linux-x64.tar.xz -C ~/sfdx --strip-components 1
+                  echo "$HOME/sfdx/bin" >> $GITHUB_PATH
+                  ~/sfdx/bin/sfdx version
+
+            - name: 'Checkout source code'
+              uses: actions/checkout@v2
+
+            - name: 'Remove namespace'
+              run: 'sed -i "s/credcheck__//g" force-app/main/customMetadata/*.md-meta.xml'
+
+            - name: 'Comment @deprecated annotation'
+              run: 'sed -i "s|@deprecated|//@deprecated|g" force-app/main/classes/**/*.cls'
+
+            - name: 'Convert to mdapi'
+              run: 'sf project convert source --root-dir force-app --source-dir force-app/fflib --source-dir force-app/main --output-dir mdapi_output_dir --package-name "CredCheck"'
+
+            - name: 'Decrypt key'
+              run: 'openssl enc -nosalt -aes-256-cbc -d -in assets/server-key/server.key.enc -out assets/server-key/server.key -base64 -K ${{ secrets.DECRYPTION_KEY }} -iv ${{ secrets.DECRYPTION_IV }}'
+
+            - name: 'Authorize STAGING org'
+              run: 'sf org login jwt --instance-url ${{ secrets.ENDPOINT }} --client-id ${{ secrets.STAGING_CONSUMER_KEY }} --jwt-key-file assets/server-key/server.key --username ${{ secrets.STAGING_USER_NAME }} --alias STAGING'
+
+            - name: 'Deploy mdapi'
+              run: 'sf project deploy start --manifest mdapi_output_dir/package.xml --target-org STAGING --wait 60 --test-level RunLocalTests'
+
+            - name: 'Deploy destructive changes'
+              run: 'sf project deploy start --manifest assets/destructiveChanges/package.xml --post-destructive-changes assets/destructiveChanges/destructiveChanges.xml --target-org STAGING --ignore-warnings'

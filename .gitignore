@@ -1,0 +1,10 @@
+node_modules/
+.sfdx/
+.sf/
+tests/
+mdapi_output_dir/
+*.key
+DEVHUB_SFDX_URL.txt
+.DS_Store
+.vscode/
+interviewer-only/

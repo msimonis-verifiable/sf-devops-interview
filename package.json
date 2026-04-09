@@ -1,0 +1,36 @@
+{
+    "name": "sf-credcheck-pkg",
+    "version": "1.42.0",
+    "description": "CredCheck Salesforce Managed Package",
+    "scripts": {
+        "org:create": "bash assets/scripts/bash/setup_scratch_org.sh",
+        "org:create:hc": "SCRATCH_ORG_DEF=config/hc-project-scratch-def.json bash assets/scripts/bash/setup_scratch_org.sh",
+        "org:delete": "sf org delete scratch --target-org",
+        "org:open": "sf org open --target-org",
+        "org:assign:permsets": "bash assets/scripts/bash/assign_default_permsets.sh",
+        "org:enable:staging": "sf apex run --file assets/scripts/apex/enable_staging.apex --target-org",
+        "org:import:testdata": "sf data import tree --files assets/importData/Setup_Data__c.json --target-org",
+        "test:unit": "sfdx-lwc-jest --skipApiVersionCheck",
+        "test:unit:ci": "sfdx-lwc-jest --skipApiVersionCheck --ci --coverage",
+        "lint": "eslint force-app/main/lwc/**/*.js",
+        "prettier": "prettier --write \"**/*.{cls,cmp,css,html,js,json,md,yaml}\"",
+        "prettier:verify": "prettier --check \"**/*.{cls,cmp,css,html,js,json,md,yaml}\"",
+        "utils:deploy:checkonly": "bash assets/scripts/bash/check_only_deploy.sh",
+        "utils:deploy:packageorg": "bash assets/scripts/bash/deploy_package_org.sh",
+        "utils:cm:enable:dmfcredentialing": "sf apex run --file assets/scripts/apex/enable_dmf.apex --target-org",
+        "runApexTest": "sf apex run test --code-coverage --result-format human --output-dir ./tests/apex --wait 60"
+    },
+    "devDependencies": {
+        "@salesforce/sfdx-lwc-jest": "^5.1.0",
+        "eslint": "^8.57.0",
+        "prettier": "^3.2.0",
+        "prettier-plugin-apex": "^2.1.0",
+        "husky": "^9.0.0",
+        "lint-staged": "^15.2.0"
+    },
+    "lint-staged": {
+        "**/*.{cls,cmp,css,html,js,json,md,yaml}": ["prettier --write"],
+        "force-app/main/lwc/**/*.js": ["eslint"],
+        "force-app/main/lwc/**": ["sfdx-lwc-jest --bail --skipApiVersionCheck -- --passWithNoTests"]
+    }
+}

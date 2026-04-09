@@ -1,0 +1,54 @@
+minimum_cumulusci_version: '4.3.0'
+project:
+    name: sf-credcheck-pkg
+    package:
+        name: CredCheck
+        namespace: credcheck
+        api_version: '63.0'
+    source_format: sfdx
+    git:
+        default_branch: develop
+        prefix_feature: feature/
+        prefix_beta: beta/
+        prefix_release: release/
+
+tasks:
+    robot:
+        options:
+            suites: robot/CredCheck/tests
+            output: robot/CredCheck/results
+    robot_testdoc:
+        options:
+            suites: robot/CredCheck/tests
+            output: robot/CredCheck/results/CredCheck_tests.html
+    run_tests:
+        options:
+            required_org_code_coverage_percent: 75
+
+flows:
+    deploy_packaging:
+        steps:
+            0:
+                task: dx
+                options:
+                    command: 'sf project convert source --root-dir force-app --source-dir force-app/fflib --source-dir force-app/main --output-dir mdapi_output_dir --package-name "CredCheck"'
+            6:
+                task: deploy
+                options:
+                    path: mdapi_output_dir
+                    transforms:
+                        - transform: find_replace
+                          options:
+                              patterns:
+                                  - find: Layout
+                                    replace: ''
+    release_production:
+        steps:
+            2:
+            3:
+    ci_master:
+        steps:
+            1:
+                flow: deploy_packaging
+            2:
+                task: run_tests

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>VerificationResult__c.LegacyExpirationDate__c</members>
+        <members>VerificationResult__c.LegacyStatus__c</members>
+        <name>CustomField</name>
+    </types>
+    <types>
+        <members>OldProviderSyncController</members>
+        <members>OldProviderSyncControllerTest</members>
+        <members>LegacyBatchProcessor</members>
+        <members>LegacyBatchProcessorTest</members>
+        <name>ApexClass</name>
+    </types>
+    <version>63.0</version>
+</Package>

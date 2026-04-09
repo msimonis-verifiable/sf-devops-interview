@@ -1,0 +1,17 @@
+{
+    "packageDirectories": [
+        {
+            "path": "force-app/fflib"
+        },
+        {
+            "package": "CredCheck",
+            "versionName": "Spring 26",
+            "versionNumber": "1.42",
+            "postInstallScript": "PostInstallScript",
+            "path": "force-app/main",
+            "default": true
+        }
+    ],
+    "namespace": "credcheck",
+    "sourceApiVersion": "63.0"
+}
