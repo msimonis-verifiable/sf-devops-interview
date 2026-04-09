@@ -1,0 +1,14 @@
+{
+    "trailingComma": "none",
+    "singleQuote": true,
+    "tabWidth": 4,
+    "plugins": ["@prettier/plugin-xml"],
+    "overrides": [
+        {
+            "files": "*.xml",
+            "options": {
+                "tabWidth": 4
+            }
+        }
+    ]
+}
