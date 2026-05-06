@@ -36,7 +36,7 @@ jobs:
                   sf version
 
             - name: 'Verify code formatting'
-              run: npx prettier --check "force-app/**/*.xml"
+              run: npx prettier --check "force-app/**/*.cls"
 
             - name: 'Set Connected App Secrets'
               if: github.event_name == 'push'
