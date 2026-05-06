@@ -18,10 +18,8 @@ jobs:
     validate:
         runs-on: ubuntu-latest
         steps:
-            - name: 'Install Salesforce CLI'
-              run: |
-                  npm install --global @salesforce/cli
-                  sf version
+            - name: 'Checkout source code'
+              uses: actions/checkout@v4
 
             - name: 'Setup Node.js'
               uses: actions/setup-node@v4
@@ -32,11 +30,13 @@ jobs:
             - name: 'Install Build Dependencies'
               run: npm ci
 
-            - name: 'Checkout source code'
-              uses: actions/checkout@v4
+            - name: 'Install Salesforce CLI'
+              run: |
+                  npm install --global @salesforce/cli
+                  sf version
 
             - name: 'Verify code formatting'
-              run: npx prettier --check "force-app/**/*.cls"
+              run: npx prettier --check "force-app/**/*.xml"
 
             - name: 'Set Connected App Secrets'
               if: github.event_name == 'push'
